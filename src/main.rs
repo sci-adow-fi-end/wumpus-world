@@ -1,5 +1,6 @@
 
 mod definite_clauses{
+    use std::collections::hash_set::Iter;
     use std::collections::HashSet;
     use std::hash::{Hash, Hasher};
 
@@ -29,6 +30,10 @@ mod definite_clauses{
             return self.premise.len() as u16;
         }
 
+        pub fn iterate_premises(&self) -> Iter<'_, String> {
+            return self.premise.iter();
+        }
+
         pub fn add_premise(&mut self, new_premise:String){
             self.premise.insert(new_premise);
         }
@@ -41,40 +46,54 @@ mod definite_clauses{
         pub fn premise_contains(&self, symbol:&String)->bool{
             return self.premise.contains(symbol);
         }
+        pub fn is_conclusion(&self, symbol:&String)->bool{
+            return self.conclusion==*symbol;
+        }
     }
 
 }
 
 
 mod knowledge_base{
+    use std::collections::HashSet;
     use std::fs::File;
     use std::io::Read;
-    use std::slice::Iter;
+    use ini::Ini;
     use crate::definite_clauses::DefiniteClause;
 
-    #[derive(Debug, Eq, PartialEq, Hash)]
+
+    #[derive(Debug, Eq, PartialEq)]
     pub struct KnowledgeBase{
-        symbols:Vec<String>,
-        implications:Vec<DefiniteClause>
+        symbols:HashSet<String>,
+        implications:HashSet<DefiniteClause>
     }
     impl KnowledgeBase{
-        pub fn iterate_symbols(&self) -> Iter<'_, String> {
+        pub fn iterate_symbols(&self) -> std::collections::hash_set::Iter<'_, String> {
             return self.symbols.iter();
         }
-        pub fn iterate_implications(&self) -> Iter<'_, DefiniteClause> {
+        pub fn iterate_implications(&self) -> std::collections::hash_set::Iter<'_, DefiniteClause> {
             return self.implications.iter();
         }
 
         fn add_symbol(&mut self, new_symbol:String){
-            self.symbols.push(new_symbol);
+            self.symbols.insert(new_symbol);
         }
 
         fn add_implication(&mut self, new_implication:DefiniteClause){
-            self.implications.push(new_implication);
+            self.implications.insert(new_implication);
+        }
+
+        pub fn symbols_contain(&self, symbol: &String)->bool{
+            return self.symbols.contains(symbol);
         }
 
         pub fn load(&mut self, path_to_knowledge:String){
-            let mut file = File::open(path_to_knowledge).unwrap();
+
+
+
+            let mut file = File::open(&path_to_knowledge).unwrap();
+            let config = Ini::load_from_file(&path_to_knowledge).expect("Failed to load INI file");
+
             let mut contents = String::new();
             file.read_to_string(&mut contents).unwrap();
             for line in contents.lines(){
@@ -144,6 +163,7 @@ mod forward_chaining{
             return Toolbox{count,inferred,queue};
         }
 
+
         pub fn is_queue_empty(&self)->bool {
             return self.queue.is_empty();
         }
@@ -183,22 +203,24 @@ mod forward_chaining{
                 None=>()
             }
         }
+
     }
 
-    pub fn forward_chaining(q:String, kb: &KnowledgeBase) ->bool{
+    pub fn forward_chaining(q:&String, kb: &KnowledgeBase) ->bool{
 
-            let mut tb= Toolbox::generate(kb);
+            let mut tb= Toolbox::generate(kb); //the queue initially contains all the knowledge base symbols
             while tb.is_queue_empty(){
                 let p = tb.pop_symbol().unwrap();
-                if p==q{
+                if p==*q{
                     return true;
                 }
-                if tb.is_already_inferred(&p){
+                if !tb.is_already_inferred(&p){
                     tb.set_inferred(&p);
                     for clause in kb.iterate_implications(){
                         if clause.premise_contains(&p){
                             tb.decrease_count(clause);
                             if tb.is_count_zero(clause){
+
                                 tb.push_symbol(clause.get_conclusion())
                             }
                         }
@@ -209,28 +231,90 @@ mod forward_chaining{
         return false;
     }
 
-    pub fn backward_chaining(q:String, kb: &KnowledgeBase) ->bool{
 
-        let mut tb= Toolbox::generate(kb);
-        while tb.is_queue_empty(){
-            let p = tb.pop_symbol().unwrap();
-            if p==q{
-                return true;
+
+}
+
+mod backward_chaining{
+    use std::collections::{HashMap, VecDeque};
+    use crate::knowledge_base::KnowledgeBase;
+
+    struct Toolbox<'a> {
+        reached: HashMap<&'a String, bool>,
+        queue: VecDeque<String>
+    }
+    impl<'a> Toolbox<'a>{
+
+        fn generate(kb: &'a KnowledgeBase, query:&String)->Self{
+
+
+            let mut reached:HashMap<&'a String, bool> = HashMap::new();
+            for symbol in kb.iterate_symbols(){
+                reached.insert(symbol, false);
             }
-            if tb.is_already_inferred(&p){
-                tb.set_inferred(&p);
-                for clause in kb.iterate_implications(){
-                    if clause.premise_contains(&p){
-                        tb.decrease_count(clause);
-                        if tb.is_count_zero(clause){
-                            tb.push_symbol(clause.get_conclusion())
+
+            let mut queue:VecDeque<String> = VecDeque::new();
+
+                queue.push_back(query.clone());
+
+            return Toolbox{ reached,queue};
+        }
+
+
+        pub fn is_queue_empty(&self)->bool {
+            return self.queue.is_empty();
+        }
+
+        pub fn pop_symbol(&mut self)->Option<String> {
+            return self.queue.pop_front();
+        }
+
+        pub fn push_symbol(&mut self, symbol: String){
+            self.queue.push_back(symbol);
+        }
+
+        pub fn is_already_reached(&self, symbol:&String) ->bool{
+            return match self.reached.get(symbol) {
+                Some(matching)=>*matching,
+                None=>false
+            }
+        }
+
+        pub fn set_reached(&mut self, symbol:&String){
+            match self.reached.get_mut(symbol) {
+                Some(matching)=> *matching=true,
+                None=>()
+            }
+        }
+
+
+
+    }
+
+    pub fn backward_chaining(q:&String, kb: &KnowledgeBase) ->bool{
+
+        let mut dead_end =false;
+
+        let mut tb= Toolbox::generate(kb,q); //the queue initially contains just the query
+        while !dead_end && tb.is_queue_empty(){
+            let p = tb.pop_symbol().unwrap();
+            if !kb.symbols_contain(&p) {
+                dead_end = true;
+                for clause in kb.iterate_implications() {
+                    if clause.is_conclusion(&p) {
+                        dead_end = false;
+                        for premise in clause.iterate_premises() {
+
+                            if !tb.is_already_reached(premise) {
+                                tb.set_reached(premise);
+                                tb.push_symbol(premise.clone());
+                            }
                         }
                     }
                 }
             }
         }
-
-        return false;
+        return if dead_end {false} else {true};
     }
 }
 
