@@ -56,8 +56,6 @@ mod definite_clauses{
 
 mod knowledge_base{
     use std::collections::HashSet;
-    use std::fs::File;
-    use std::io::Read;
     use ini::Ini;
     use crate::definite_clauses::DefiniteClause;
 
@@ -68,6 +66,12 @@ mod knowledge_base{
         implications:HashSet<DefiniteClause>
     }
     impl KnowledgeBase{
+
+        pub fn new()->Self{
+            let symbols:HashSet<String>=HashSet::new();
+            let implications:HashSet<DefiniteClause>=HashSet::new();
+            return KnowledgeBase{symbols,implications};
+        }
         pub fn iterate_symbols(&self) -> std::collections::hash_set::Iter<'_, String> {
             return self.symbols.iter();
         }
@@ -87,44 +91,51 @@ mod knowledge_base{
             return self.symbols.contains(symbol);
         }
 
-        pub fn load(&mut self, path_to_knowledge:String){
+        pub fn load(&mut self, path_to_knowledge:&String){
+
+            let config = Ini::load_from_file(path_to_knowledge).expect("Failed to load INI file");
+
+            if let Some(section) = config.section(Some("inputs")) {
+                if let Some(contents) = section.get("KB") {
+
+                    for clause in contents.split(" ; "){
 
 
+                        if clause.contains("->"){
+                            let mut definite_clause = DefiniteClause::new();
+                            let mut split_line = clause.split("->");
 
-            let mut file = File::open(&path_to_knowledge).unwrap();
-            let config = Ini::load_from_file(&path_to_knowledge).expect("Failed to load INI file");
+                            if let Some(premise) = split_line.next() {
+                                for element in premise.split(","){
+                                    definite_clause.add_premise(element.to_string())
+                                }
+                            } else {
+                                panic!("error in the clauses' syntax");
+                            }
 
-            let mut contents = String::new();
-            file.read_to_string(&mut contents).unwrap();
-            for line in contents.lines(){
+                            if let Some(conclusion) = split_line.next() {
+                                definite_clause.set_conclusion(conclusion.to_string());
+                            } else {
+                                panic!("error in the symbols' syntax");
+                            }
+                            self.add_implication(definite_clause);
 
-
-                if line.contains("->"){
-                    let mut definite_clause = DefiniteClause::new();
-                    let mut split_line = line.split("->");
-
-                    if let Some(premise) = split_line.next() {
-                        for element in premise.split(","){
-                            definite_clause.add_premise(element.to_string())
                         }
-                    } else {
-                        panic!();
+                        else {
+                            self.add_symbol(clause.to_string());
+                        }
+
                     }
-
-                    if let Some(conclusion) = split_line.next() {
-                        definite_clause.set_conclusion(conclusion.to_string());
-                    } else {
-                        panic!();
-                    }
-                    self.add_implication(definite_clause);
-
                 }
-                else {
-                    self.add_symbol(line.to_string());
                 }
-
+            else{
+                panic!("error in the knowledge base's file structure");
             }
-        }
+            }
+
+
+
+
     }
 
 }
@@ -172,6 +183,10 @@ mod forward_chaining{
             return self.queue.pop_front();
         }
 
+        pub fn print_queue(&self){
+            println!("{:?}",self.queue);
+        }
+
         pub fn push_symbol(&mut self, symbol: String){
             self.queue.push_back(symbol);
         }
@@ -206,10 +221,19 @@ mod forward_chaining{
 
     }
 
-    pub fn forward_chaining(q:&String, kb: &KnowledgeBase) ->bool{
+    pub fn forward_chaining(q:&String, kb: &KnowledgeBase, debug: bool) ->bool{
+
 
             let mut tb= Toolbox::generate(kb); //the queue initially contains all the knowledge base symbols
-            while tb.is_queue_empty(){
+            let mut i =0; //index for debug
+            while !tb.is_queue_empty(){
+                i=i+1;
+                if debug{
+                    println!("Queue at step {}:",i);
+                    tb.print_queue();
+                    println!(" ");
+                }
+
                 let p = tb.pop_symbol().unwrap();
                 if p==*q{
                     return true;
@@ -265,6 +289,10 @@ mod backward_chaining{
             return self.queue.is_empty();
         }
 
+        pub fn print_queue(&self){
+            println!("{:?}",self.queue);
+        }
+
         pub fn pop_symbol(&mut self)->Option<String> {
             return self.queue.pop_front();
         }
@@ -291,12 +319,22 @@ mod backward_chaining{
 
     }
 
-    pub fn backward_chaining(q:&String, kb: &KnowledgeBase) ->bool{
+    pub fn backward_chaining(q:&String, kb: &KnowledgeBase, debug:bool) ->bool{
 
         let mut dead_end =false;
 
         let mut tb= Toolbox::generate(kb,q); //the queue initially contains just the query
-        while !dead_end && tb.is_queue_empty(){
+        let mut i=0;//index for debug
+        while !dead_end && !tb.is_queue_empty(){
+
+            i=i+1;
+            if debug{
+                println!("Queue at step {}:", i);
+                tb.print_queue();
+                println!(" ");
+            }
+
+
             let p = tb.pop_symbol().unwrap();
             if !kb.symbols_contain(&p) {
                 dead_end = true;
@@ -319,6 +357,100 @@ mod backward_chaining{
 }
 
 
+
+mod solver{
+    use ini::Ini;
+    use crate::knowledge_base::KnowledgeBase;
+    use crate::solver::Algorithms::{BackwardChaining, ForwardChaining};
+    use crate::forward_chaining::forward_chaining;
+    use crate::backward_chaining::backward_chaining;
+
+    #[derive(Debug)]
+    enum Algorithms{
+        ForwardChaining,
+        BackwardChaining
+    }
+
+
+    #[derive(Debug)]
+    pub struct Solver{
+        kb:KnowledgeBase,
+        query:String,
+        algorithm_used:Algorithms,
+        debug:bool
+
+    }
+
+    impl Solver{
+        pub fn load_problem(file: String)->Self{
+
+            let mut kb=KnowledgeBase::new();
+            kb.load(&file);
+
+            let config = Ini::load_from_file(&file).expect("Failed to load INI file");
+
+            let mut structural_error= false;
+
+            let mut query=String::new();
+
+            if let Some(section) = config.section(Some("inputs")) {
+                if let Some(q) = section.get("query") {
+                    query= q.parse().unwrap();
+                }
+                else { structural_error=true; }
+            }
+            else { structural_error=true; }
+
+            let mut algorithm_used= ForwardChaining;
+
+            if let Some(section) = config.section(Some("algorithm")) {
+                if let Some(a) = section.get("algorithm") {
+                    algorithm_used= match a {
+                        "forward chaining"=>ForwardChaining,
+                        "backward chaining"=>BackwardChaining,
+                        _ => panic!("the selected algorithm is not valid!")
+                    }
+                }
+                else { structural_error=true; }
+            }
+            else { structural_error=true; }
+
+            let mut debug=false;
+
+            if let Some(section) = config.section(Some("algorithm")) {
+                if let Some(d) = section.get("debug") {
+                    debug= match d{
+                        "1"=>true,
+                        "0"=>false,
+                        _ => panic!("the debug option is not valid")
+                    }
+                }
+                else { structural_error=true; }
+            }
+            else { structural_error=true; }
+
+
+            if structural_error{
+                panic!("there is an error in the initialization file structure")
+            }
+
+            return Solver{kb,query,algorithm_used,debug};
+
+
+        }
+        pub fn solve(&self)->bool{
+           return match self.algorithm_used {
+               ForwardChaining=>forward_chaining(&self.query,&self.kb,self.debug),
+               BackwardChaining=>backward_chaining(&self.query,&self.kb,self.debug)
+           }
+        }
+    }
+}
+
+use crate::solver::Solver;
+
 fn main() {
-    println!("Hello, world!");
+
+let s = Solver::load_problem("/home/alessio/RustroverProjects/wumpus_world/ini/knowledge_base.ini".to_string());
+println!("{}", s.solve());
 }
