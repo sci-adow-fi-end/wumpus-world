@@ -30,12 +30,30 @@
     impl Solver{
         pub fn load_problem(file: String)->Self{
 
-            let mut kb=KnowledgeBase::new();
-            kb.load(&file);
+
 
             let config = Ini::load_from_file(&file).expect("Failed to load INI file");
 
+
+
             let mut structural_error= false;
+            let mut kb_string = String::new();
+
+            if let Some(section) = config.section(Some("inputs")) {
+                if let Some(q) = section.get("KB") {
+                    kb_string= q.parse().unwrap();
+                }
+                else { structural_error=true; }
+            }
+            else { structural_error=true; }
+
+
+            let mut kb=KnowledgeBase::new();
+
+            for element in kb_string.split(",") {
+                let path= "ini/".to_string()+&element.to_string();
+                kb.load(&path);
+            }
 
             let mut query=String::new();
 

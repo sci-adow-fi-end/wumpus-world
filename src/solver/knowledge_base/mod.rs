@@ -1,6 +1,8 @@
     pub(crate) mod definite_clause;
 
     use std::collections::HashSet;
+    use std::fs::File;
+    use std::io::Read;
     use ini::Ini;
     use definite_clause::DefiniteClause;
 
@@ -38,12 +40,14 @@
 
         pub fn load(&mut self, path_to_knowledge:&String){
 
-            let config = Ini::load_from_file(path_to_knowledge).expect("Failed to load INI file");
+            println!("{}", path_to_knowledge);
 
-            if let Some(section) = config.section(Some("inputs")) {
-                if let Some(contents) = section.get("KB") {
+            let mut file = File::open(path_to_knowledge).expect("knowledge base file not found");
 
-                    for clause in contents.split(" ; "){
+            let mut content =String::new();
+            file.read_to_string(&mut content).expect("error in file parsing");
+
+                    for clause in content.lines(){
 
 
                         if clause.contains("->"){
@@ -73,13 +77,5 @@
                     }
                 }
             }
-            else{
-                panic!("error in the knowledge base's file structure");
-            }
-        }
 
-
-
-
-    }
 
