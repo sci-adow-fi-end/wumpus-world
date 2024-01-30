@@ -3,7 +3,6 @@
     use std::collections::HashSet;
     use std::fs::File;
     use std::io::Read;
-    use ini::Ini;
     use definite_clause::DefiniteClause;
 
 
