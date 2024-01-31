@@ -39,7 +39,6 @@
 
         pub fn load(&mut self, path_to_knowledge:&String){
 
-            println!("{}", path_to_knowledge);
 
             let mut file = File::open(path_to_knowledge).expect("knowledge base file not found");
 

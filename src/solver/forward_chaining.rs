@@ -5,7 +5,7 @@
 
     struct Toolbox<'a> {
         count: HashMap<&'a DefiniteClause, u16>,
-        inferred: HashMap<&'a String, bool>,
+        inferred: HashMap<String, bool>,
         queue: VecDeque<String>
     }
     impl<'a> Toolbox<'a>{
@@ -17,9 +17,9 @@
                 count.insert(implication, implication.get_premises_number());
             }
 
-            let mut inferred:HashMap<&'a String, bool> = HashMap::new();
+            let mut inferred:HashMap<String, bool> = HashMap::new();
             for symbol in kb.iterate_symbols(){
-                inferred.insert(symbol, false);
+                inferred.insert(symbol.clone(), false);
             }
 
             let mut queue:VecDeque<String> = VecDeque::new();
@@ -47,10 +47,10 @@
             self.queue.push_back(symbol);
         }
 
-        pub fn is_already_inferred(&self, symbol:&String)->bool{
+        pub fn already_inferred(&mut self, symbol:& String) ->bool{
             return match self.inferred.get(symbol) {
                 Some(matching)=>*matching,
-                None=>false
+                None=>{self.inferred.insert(symbol.clone(),false);false}
             }
         }
 
@@ -94,7 +94,7 @@
             if p==*q{
                 return true;
             }
-            if !tb.is_already_inferred(&p){
+            if !tb.already_inferred(&p){
                 tb.set_inferred(&p);
                 for clause in kb.iterate_implications(){
                     if clause.premise_contains(&p){
@@ -105,6 +105,9 @@
                         }
                     }
                 }
+            }
+            else if debug{
+                println!("{p} already inferred")
             }
         }
 
