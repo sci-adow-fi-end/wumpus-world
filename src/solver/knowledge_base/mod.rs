@@ -1,27 +1,27 @@
-    pub(crate) mod definite_clause;
+    pub(crate) mod implication;
 
     use std::collections::HashSet;
     use std::fs::File;
     use std::io::Read;
-    use definite_clause::DefiniteClause;
+    use implication::Implication;
 
 
     #[derive(Debug, Eq, PartialEq)]
     pub struct KnowledgeBase{
         symbols:HashSet<String>,
-        implications:HashSet<DefiniteClause>
+        implications:HashSet<Implication>
     }
     impl KnowledgeBase{
 
         pub fn new()->Self{
             let symbols:HashSet<String>=HashSet::new();
-            let implications:HashSet<DefiniteClause>=HashSet::new();
+            let implications:HashSet<Implication>=HashSet::new();
             return KnowledgeBase{symbols,implications};
         }
         pub fn iterate_symbols(&self) -> std::collections::hash_set::Iter<'_, String> {
             return self.symbols.iter();
         }
-        pub fn iterate_implications(&self) -> std::collections::hash_set::Iter<'_, DefiniteClause> {
+        pub fn iterate_implications(&self) -> std::collections::hash_set::Iter<'_, Implication> {
             return self.implications.iter();
         }
 
@@ -29,7 +29,7 @@
             self.symbols.insert(new_symbol);
         }
 
-        fn add_implication(&mut self, new_implication:DefiniteClause){
+        fn add_implication(&mut self, new_implication: Implication){
             self.implications.insert(new_implication);
         }
 
@@ -49,7 +49,7 @@
 
 
                         if clause.contains("->"){
-                            let mut definite_clause = DefiniteClause::new();
+                            let mut definite_clause = Implication::new();
                             let mut split_line = clause.split("->");
 
                             if let Some(premise) = split_line.next() {

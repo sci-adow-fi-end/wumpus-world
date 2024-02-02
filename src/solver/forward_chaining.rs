@@ -1,10 +1,10 @@
 
     use std::collections::{HashMap, VecDeque};
-    use crate::solver::knowledge_base::definite_clause::DefiniteClause;
+    use crate::solver::knowledge_base::implication::Implication;
     use crate::solver::knowledge_base::KnowledgeBase;
 
     struct Toolbox<'a> {
-        count: HashMap<&'a DefiniteClause, u16>,
+        count: HashMap<&'a Implication, u16>,
         inferred: HashMap<String, bool>,
         queue: VecDeque<String>
     }
@@ -12,7 +12,7 @@
 
         fn generate(kb: &'a KnowledgeBase)->Self{
 
-            let mut count:HashMap<&'a DefiniteClause, u16> = HashMap::new();
+            let mut count:HashMap<&'a Implication, u16> = HashMap::new();
             for implication in kb.iterate_implications(){
                 count.insert(implication, implication.get_premises_number());
             }
@@ -61,14 +61,14 @@
             }
         }
 
-        pub fn is_count_zero(&self, clause:&DefiniteClause)->bool{
+        pub fn is_count_zero(&self, clause:&Implication) ->bool{
             return match self.count.get(clause) {
                 Some(matching)=>if *matching==0 {true} else { false },
                 None=>false
             }
         }
 
-        pub fn decrease_count(&mut self, clause:&DefiniteClause){
+        pub fn decrease_count(&mut self, clause:&Implication){
             match self.count.get_mut(clause) {
                 Some(matching)=> *matching-=1,
                 None=>()

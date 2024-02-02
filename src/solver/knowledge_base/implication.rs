@@ -4,11 +4,11 @@
     use std::hash::{Hash, Hasher};
 
     #[derive(Debug, Eq, PartialEq)]
-    pub struct DefiniteClause{
+    pub struct Implication {
         premise:HashSet<String>,
         conclusion:String
     }
-    impl Hash for DefiniteClause {
+    impl Hash for Implication {
         fn hash<H: Hasher>(&self, state: &mut H) {
             let premise_vec: Vec<_> = self.premise.iter().collect();
             premise_vec.hash(state);
@@ -16,10 +16,10 @@
         }
     }
 
-    impl DefiniteClause{
+    impl Implication {
 
         pub fn new()->Self{
-            DefiniteClause{
+            Implication {
                 premise:HashSet::new(),
                 conclusion:String::new()
             }
